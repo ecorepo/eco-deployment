@@ -129,15 +129,11 @@ jobs:
             kubectl delete -f yaml-templates/econo-deployment-test.yaml
       
       - run:
-          name: Envio notificacion por SLAC de OK
+          name: Envio notificacion por SLACK de OK
           command: |
 
             echo "Deployment OK"
-
-            if [ $? -e 0 ]; then
-              curl -X POST -H 'Content-type: application/json' --data '{"text":"¡Deployment - ElEconomista ejecutado correctamente...!"}' https://hooks.slack.com/services/"$SLACK_TOKEN"
-              exit 0
-            fi
+            curl -X POST -H 'Content-type: application/json' --data '{"text":"¡Deployment - ElEconomista ejecutado correctamente...!"}' https://hooks.slack.com/services/"$SLACK_TOKEN"
 
 
 
