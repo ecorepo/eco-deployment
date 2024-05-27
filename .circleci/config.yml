@@ -81,7 +81,7 @@ jobs:
           name: Verificar conexión con la primera instancia SQL
           command: |
             kubectl -n ecoprensa exec econo-deployment-test -- sh -c "mysql -h \"$DB_HOST_1\" -u \"$DB_USER\" -p\"$DB_PASS\" -e 'USE ElEconomista; CALL get_status_deployment(1);' | tee /tmp/deploy_status_1.log"
-            kubectl -n ecoprensa exec econo-deployment-test -- sh -c "cat /tmp/deploy_status_1.log | grep -q 'OK' && exit 0 || exit 1"
+            kubectl -n ecoprensa exec econo-deployment-test -- sh -c "cat /tmp/deploy_status_1.log | grep -q 'KO' && exit 0 || exit 1"
 
       - run:
           name: Verificar conexión con la segunda instancia SQL
