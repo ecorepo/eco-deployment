@@ -138,4 +138,3 @@ workflows:
       - verifico-dominio-eleconomista-es:
           requires:
             - ejecutando-tests-funcionales
-
