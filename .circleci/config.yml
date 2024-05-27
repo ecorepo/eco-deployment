@@ -24,7 +24,7 @@ jobs:
             echo "$GCP_AUTH_KEY" > /tmp/account.json
             gcloud auth activate-service-account --key-file=/tmp/account.json
             gcloud config set project ecoprensa-web
-            gcloud config set compute/zone europe-west1-
+            gcloud config set compute/zone europe-west1-b
             gcloud container clusters get-credentials econo-prod-gke-cluster-01
 
             if [ $? -ne 0 ]; then
@@ -128,6 +128,18 @@ jobs:
           command: |
             kubectl delete -f yaml-templates/econo-deployment-test.yaml
       
+      - run:
+          name: Envio notificacion por SLAC de OK
+          command: |
+
+            echo "Deployment OK"
+
+            if [ $? -e 0 ]; then
+              curl -X POST -H 'Content-type: application/json' --data '{"text":"¡Deployment - ElEconomista ejecutado correctamente...!"}' https://hooks.slack.com/services/"$SLACK_TOKEN"
+              exit 0
+            fi
+
+
 
 
 ########## WORKFLOWS
