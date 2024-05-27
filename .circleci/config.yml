@@ -5,7 +5,6 @@ default: &defaults
   docker:
     - image: cimg/php:5.6.40-browsers
 
-
 ########## JOBS
 jobs:
 
@@ -26,11 +25,6 @@ jobs:
             gcloud config set project ecoprensa-web
             gcloud config set compute/zone europe-west1-b
             gcloud container clusters get-credentials econo-prod-gke-cluster-01
-
-            if [ $? -ne 0 ]; then
-              curl -X POST -H 'Content-type: application/json' --data '{"text":"Ha ocurrido un error..."}' https://hooks.slack.com/services/"$SLACK_TOKEN"
-              exit 1
-            fi
 
       - run:
           name: Levantando el nuevo pod
@@ -122,29 +116,15 @@ jobs:
             gcloud config set project ecoprensa-web
             gcloud config set compute/zone europe-west1-b
             gcloud container clusters get-credentials econo-prod-gke-cluster-01
+            kubectl get pods -n ecoprensa
 
       - run:
-          name: Elimino el nuevo pod
+          name: Eliminando el pod existente
           command: |
             kubectl delete -f yaml-templates/econo-deployment-test.yaml
+
+
       
-      - run:
-          name: Envio notificacion por SLACK de OK
-          command: |
-
-            echo "Deployment OK"
-            curl -X POST -H 'Content-type: application/json' --data '{"text":"¡Deployment - ElEconomista ejecutado correctamente...!"}' https://hooks.slack.com/services/"$SLACK_TOKEN"
-
-            if [ $? -eq 0 ]; then
-              echo "Deployment OK"
-              curl -X POST -H 'Content-type: application/json' --data '{"text":"¡Deployment - ElEconomista ejecutado correctamente...!"}' https://hooks.slack.com/services/"$SLACK_TOKEN"
-            else
-              echo "Deployment failed with exit code $DEPLOY_EXIT_CODE"
-              exit 1
-            fi
-
-
-
 
 ########## WORKFLOWS
 workflows:
