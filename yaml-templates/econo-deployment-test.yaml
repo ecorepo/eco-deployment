@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: econo-deployment-test
+  namespace: ecoprensa
+spec:
+  containers:
+  - name: econo-deployment-container
+    image: europe-west1-docker.pkg.dev/ecoprensa-web/econo-docker-repo/eco-web:latest

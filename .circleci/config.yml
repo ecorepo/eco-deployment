@@ -1,0 +1,140 @@
+version: 2.1
+
+default: &defaults
+  working_directory: ~/eco-workspace
+  docker:
+    - image: cimg/php:5.6.40-browsers
+
+
+########## JOBS
+jobs:
+
+  montaje-del-pod:
+    docker:
+      - image: google/cloud-sdk:latest
+
+    steps:
+
+      - checkout
+
+      - run:
+          name: Autenticar en GCP
+          command: |
+            apt-get -y update && apt-get -y install unzip
+            echo "$GCP_AUTH_KEY" > /tmp/account.json
+            gcloud auth activate-service-account --key-file=/tmp/account.json
+            gcloud config set project ecoprensa-web
+            gcloud config set compute/zone europe-west1-b
+            gcloud container clusters get-credentials econo-prod-gke-cluster-01
+
+      - run:
+          name: Levantando el nuevo pod
+          command: |
+            kubectl apply -f yaml-templates/econo-deployment-test.yaml
+
+
+
+  ejecutando-linter:
+    docker:
+      - image: cimg/base:2024.02
+
+    steps:
+      - checkout
+
+
+
+  ejecutando-tests-unitarios:
+    docker:
+      - image: cimg/base:2024.02
+
+    steps:
+
+      - checkout
+
+
+
+  ejecutando-tests-de-integracion-db:
+    docker:
+      - image: google/cloud-sdk:latest
+
+    steps:
+      - checkout
+
+      - attach_workspace:
+          at: ~/eco-workspace
+
+      - run:
+          name: Autenticar en GCP
+          command: |
+            apt-get -y update && apt-get -y install unzip
+            echo "$GCP_AUTH_KEY" > /tmp/account.json
+            gcloud auth activate-service-account --key-file=/tmp/account.json
+            gcloud config set project ecoprensa-web
+            gcloud config set compute/zone europe-west1-b
+            gcloud container clusters get-credentials econo-prod-gke-cluster-01
+
+      - run:
+          name: Instalar MySQL client
+          command: |
+            kubectl -n ecoprensa exec econo-deployment-test -- sh -c "apt-get -y update && apt-get -y install default-mysql-client"
+
+      - run:
+          name: Verificar conexion con la primera instancia SQL
+          command: |
+            kubectl -n ecoprensa exec econo-deployment-test -- sh -c "mysql -h \"$DB_HOST_1\" -u \"$DB_USER\" -p\"$DB_PASS\" -e 'SHOW DATABASES;'"
+
+      - run:
+          name: Verificar conexion con la segunda instancia SQL
+          command: |
+            kubectl -n ecoprensa exec econo-deployment-test -- sh -c "mysql -h \"$DB_HOST_2\" -u \"$DB_USER\" -p\"$DB_PASS\" -e 'SHOW DATABASES;'"
+
+
+
+  ejecutando-tests-funcionales:
+    docker:
+      - image: cimg/base:2024.02
+
+    steps:
+
+      - checkout
+
+
+
+  verifico-dominio-eleconomista-es:
+    docker:
+      - image: google/cloud-sdk:latest
+
+    steps:
+
+      - checkout
+
+      
+
+########## WORKFLOWS
+workflows:
+
+  eco-deployment-pipeline:
+
+    jobs:
+
+      - montaje-del-pod
+
+      - ejecutando-linter:
+          requires:
+            - montaje-del-pod
+
+      - ejecutando-tests-unitarios:
+          requires:
+            - ejecutando-linter
+
+      - ejecutando-tests-de-integracion-db:
+          requires:
+            - ejecutando-tests-unitarios
+
+      - ejecutando-tests-funcionales:
+          requires:
+            - ejecutando-tests-de-integracion-db
+
+      - verifico-dominio-eleconomista-es:
+          requires:
+            - ejecutando-tests-funcionales
