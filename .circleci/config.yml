@@ -135,6 +135,14 @@ jobs:
             echo "Deployment OK"
             curl -X POST -H 'Content-type: application/json' --data '{"text":"¡Deployment - ElEconomista ejecutado correctamente...!"}' https://hooks.slack.com/services/"$SLACK_TOKEN"
 
+            if [ $? -eq 0 ]; then
+              echo "Deployment OK"
+              curl -X POST -H 'Content-type: application/json' --data '{"text":"¡Deployment - ElEconomista ejecutado correctamente...!"}' https://hooks.slack.com/services/"$SLACK_TOKEN"
+            else
+              echo "Deployment failed with exit code $DEPLOY_EXIT_CODE"
+              exit 1
+            fi
+
 
 
 
