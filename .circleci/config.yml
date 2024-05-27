@@ -24,8 +24,13 @@ jobs:
             echo "$GCP_AUTH_KEY" > /tmp/account.json
             gcloud auth activate-service-account --key-file=/tmp/account.json
             gcloud config set project ecoprensa-web
-            gcloud config set compute/zone europe-west1-b
+            gcloud config set compute/zone europe-west1-
             gcloud container clusters get-credentials econo-prod-gke-cluster-01
+
+            if [ $? -ne 0 ]; then
+              curl -X POST -H 'Content-type: application/json' --data '{"text":"Ha ocurrido un error..."}' https://hooks.slack.com/services/"$SLACK_TOKEN"
+              exit 1
+            fi
 
       - run:
           name: Levantando el nuevo pod
