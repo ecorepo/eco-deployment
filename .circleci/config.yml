@@ -78,14 +78,16 @@ jobs:
             kubectl -n ecoprensa exec econo-deployment-test -- sh -c "apt-get -y update && apt-get -y install default-mysql-client"
 
       - run:
-          name: Verificar conexion con la primera instancia SQL
+          name: Verificar conexión con la primera instancia SQL
           command: |
-            kubectl -n ecoprensa exec econo-deployment-test -- sh -c "mysql -h \"$DB_HOST_1\" -u \"$DB_USER\" -p\"$DB_PASS\" -e 'USE ElEconomista; CALL get_status_deployment(1);' | grep -q 'OK' && exit 0 || exit 1"
+            kubectl -n ecoprensa exec econo-deployment-test -- sh -c "mysql -h \"$DB_HOST_1\" -u \"$DB_USER\" -p\"$DB_PASS\" -e 'USE ElEconomista; CALL get_status_deployment(1);' | sudo tee /tmp/deploy_status_1.log"
+            kubectl -n ecoprensa exec econo-deployment-test -- sh -c "cat /tmp/deploy_status_1.log | grep -q 'OK' && exit 0 || exit 1"
 
       - run:
-          name: Verificar conexion con la segunda instancia SQL
+          name: Verificar conexión con la segunda instancia SQL
           command: |
-            kubectl -n ecoprensa exec econo-deployment-test -- sh -c "mysql -h \"$DB_HOST_2\" -u \"$DB_USER\" -p\"$DB_PASS\" -e 'USE Blog_Comentarios; CALL get_status_deployment(1);' | grep -q 'OK' && exit 0 || exit 1"
+            kubectl -n ecoprensa exec econo-deployment-test -- sh -c "mysql -h \"$DB_HOST_2\" -u \"$DB_USER\" -p\"$DB_PASS\" -e 'USE Blog_Comentarios; CALL get_status_deployment(1);' | sudo tee /tmp/deploy_status_2.log"
+            kubectl -n ecoprensa exec econo-deployment-test -- sh -c "cat /tmp/deploy_status_2.log | grep -q 'OK' && exit 0 || exit 1"
 
 
 
