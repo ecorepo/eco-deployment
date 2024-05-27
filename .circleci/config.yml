@@ -108,7 +108,22 @@ jobs:
 
       - checkout
 
+      - run:
+          name: Autenticar en GCP
+          command: |
+            apt-get -y update && apt-get -y install unzip
+            echo "$GCP_AUTH_KEY" > /tmp/account.json
+            gcloud auth activate-service-account --key-file=/tmp/account.json
+            gcloud config set project ecoprensa-web
+            gcloud config set compute/zone europe-west1-b
+            gcloud container clusters get-credentials econo-prod-gke-cluster-01
+
+      - run:
+          name: Elimino el nuevo pod
+          command: |
+            kubectl delete -f yaml-templates/econo-deployment-test.yaml
       
+
 
 ########## WORKFLOWS
 workflows:
