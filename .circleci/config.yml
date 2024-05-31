@@ -5,6 +5,26 @@ default: &defaults
   docker:
     - image: cimg/php:5.6.40-browsers
 
+
+
+########## ORBS
+orbs:
+  sonarcloud: sonarsource/sonarcloud@2.0.0
+
+
+
+########## COMMANDS
+commands:
+
+  set_xdebug_coverage:
+    description: "Configurar Xdebug para cobertura"
+    steps:
+      - run:
+          name: Configurar Xdebug para cobertura
+          command: echo 'export XDEBUG_MODE=coverage' >> $BASH_ENV
+
+
+
 ########## JOBS
 jobs:
 
@@ -26,10 +46,46 @@ jobs:
             gcloud config set compute/zone europe-west1-b
             gcloud container clusters get-credentials econo-prod-gke-cluster-01
 
+      #- run:
+      #    name: Eliminando el pod existente
+      #    command: |
+      #      kubectl delete -f yaml-templates/econo-deployment-test.yaml
+
       - run:
           name: Levantando el nuevo pod
           command: |
             kubectl apply -f yaml-templates/econo-deployment-test.yaml
+
+      - sonarcloud/scan
+
+
+
+  descargando-archivos-desde-pod:
+    docker:
+      - image: google/cloud-sdk:latest
+
+    steps:
+      - checkout
+
+      - run:
+          name: Autenticar en GCP
+          command: |
+            apt-get -y update && apt-get -y install unzip
+            echo "$GCP_AUTH_KEY" > /tmp/account.json
+            gcloud auth activate-service-account --key-file=/tmp/account.json
+            gcloud config set project ecoprensa-web
+            gcloud config set compute/zone europe-west1-b
+            gcloud container clusters get-credentials econo-prod-gke-cluster-01
+
+      - run:
+          name: Copiar contenido de /home del pod al directorio de trabajo
+          command: |
+            kubectl cp ecoprensa/econo-deployment-test:/home/eleconomista/tests ~/eco-workspace/tests/
+
+      - persist_to_workspace:
+          root: ~/eco-workspace
+          paths:
+            - .  # Guardar todos los archivos en el directorio eco-workspace
 
 
 
@@ -40,6 +96,23 @@ jobs:
     steps:
       - checkout
 
+      - attach_workspace:
+          at: ~/eco-workspace
+
+      - run:
+          name: Instalamos PHP_CodeSniffer
+          command: |
+            sudo apt-get -y update
+            sudo apt-get -y install php-codesniffer dos2unix
+
+      - run:
+          name: Escaneo estatico con PHP_CodeSniffer
+          command: |
+            cd ~/eco-workspace/tests/linter && dos2unix *
+            phpcs --standard=PSR12 index.php
+
+      - sonarcloud/scan
+
 
 
   ejecutando-tests-unitarios:
@@ -49,6 +122,55 @@ jobs:
     steps:
 
       - checkout
+
+      - attach_workspace:
+          at: ~/eco-workspace
+
+      - set_xdebug_coverage      
+
+      - run:
+          name: Instalar PHPUnit
+          command: |
+
+            cd ~
+            sudo apt-get -y update
+            sudo apt-get -y install software-properties-common 
+            sudo add-apt-repository -y ppa:ondrej/php
+            sudo apt-get -y update
+            sudo apt-get -y install php8.2 php8.2-cli php8.2-ctype php8.2-dom php8.2-dev \
+              php8.2-mbstring php8.2-tokenizer php8.2-xml php8.2-xmlwriter php-pear
+
+            wget https://phar.phpunit.de/phpunit.phar
+            chmod +x phpunit.phar
+            sudo mv phpunit.phar /usr/local/bin/phpunit
+
+            sudo mkdir /usr/local/bin/.phpunit.result.cache
+            sudo chmod 777 /usr/local/bin/.phpunit.result.cache
+
+            sudo pecl channel-update pecl.php.net
+            sudo pecl install xdebug
+            echo "zend_extension=$(find /usr/lib/php/ -name xdebug.so)" | sudo tee -a /etc/php/8.2/cli/php.ini
+
+      - run:
+          name: Ejecutar pruebas unitarias con PHPUnit
+          command: |
+
+            #cd ~/eco-workspace/tests/unitarios
+            #phpunit FuncionesTest.php
+            TEST_PATH=~/eco-workspace/tests/unitarios
+            phpunit $TEST_PATH
+            phpunit --coverage-clover=coverage.xml --coverage-filter=$TEST_PATH --coverage-html=coverage-report $TEST_PATH
+
+      - store_artifacts:
+          name: Se guarda artifact - coverage.xml
+          path: coverage.xml
+
+      - store_artifacts:
+          name: Se guarda artifact de informe HTML de covertura
+          path: coverage-report
+
+
+      - sonarcloud/scan
 
 
 
@@ -89,6 +211,8 @@ jobs:
             kubectl -n ecoprensa exec econo-deployment-test -- sh -c "mysql -h \"$DB_HOST_2\" -u \"$DB_USER\" -p\"$DB_PASS\" -e 'USE Blog_Comentarios; CALL get_status_deployment(1);' | tee /tmp/deploy_status_2.log"
             kubectl -n ecoprensa exec econo-deployment-test -- sh -c "cat /tmp/deploy_status_2.log | grep -q 'OK' && exit 0 || exit 1"
 
+      - sonarcloud/scan
+
 
 
   ejecutando-tests-funcionales:
@@ -98,6 +222,8 @@ jobs:
     steps:
 
       - checkout
+
+      - sonarcloud/scan
 
 
 
@@ -121,10 +247,26 @@ jobs:
             kubectl get pods -n ecoprensa
 
       - run:
+          name: Verificando el dominio
+          command: |
+            # Modifico /etc/hosts
+            kubectl exec econo-deployment-test -n ecoprensa -- sh -c "echo '127.0.0.1 www.eleconomista.es' | tee -a /etc/hosts"
+            kubectl exec econo-deployment-test -n ecoprensa -- sh -c "cat /etc/hosts"
+
+            # Modifico /etc/apache2/sites-available/eleconomista.es.conf
+            kubectl exec econo-deployment-test -n ecoprensa -- sed -i 's/RewriteCond %{HTTP_HOST} ^eleconomista.es \[NC\]/#RewriteCond %{HTTP_HOST} ^eleconomista.es \[NC\]/' /etc/apache2/sites-available/eleconomista.es.conf
+            kubectl exec econo-deployment-test -n ecoprensa -- sed -i 's/RewriteRule ^(.*)$ https:\/\/www.eleconomista.es$1 \[L,R=301\]/#RewriteRule ^(.*)$ https:\/\/www.eleconomista.es$1 \[L,R=301\]/' /etc/apache2/sites-available/eleconomista.es.conf
+            kubectl exec econo-deployment-test -n ecoprensa -- sh -c "cat /etc/apache2/sites-available/eleconomista.es.conf"
+            kubectl exec econo-deployment-test -n ecoprensa -- /etc/init.d/apache2 reload
+            kubectl exec econo-deployment-test -n ecoprensa -- sh -c "chown -R www-data:www-data /home/eleconomista"
+            kubectl exec econo-deployment-test -n ecoprensa -- sh -c "curl http://www.eleconomista.es"
+
+      - run:
           name: Eliminando el pod existente
           command: |
             kubectl delete -f yaml-templates/econo-deployment-test.yaml
 
+      - sonarcloud/scan
 
       
 
@@ -135,24 +277,35 @@ workflows:
 
     jobs:
 
-      - montaje-del-pod
+      - montaje-del-pod:
+          context: SonarCloud
 
-      - ejecutando-linter:
+      - descargando-archivos-desde-pod:
+          context: SonarCloud
           requires:
             - montaje-del-pod
 
+      - ejecutando-linter:
+          context: SonarCloud
+          requires:
+            - descargando-archivos-desde-pod
+
       - ejecutando-tests-unitarios:
+          context: SonarCloud
           requires:
             - ejecutando-linter
 
       - ejecutando-tests-de-integracion-db:
+          context: SonarCloud
           requires:
             - ejecutando-tests-unitarios
 
       - ejecutando-tests-funcionales:
+          context: SonarCloud
           requires:
             - ejecutando-tests-de-integracion-db
 
       - verifico-dominio-eleconomista-es:
+          context: SonarCloud
           requires:
             - ejecutando-tests-funcionales
