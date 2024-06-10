@@ -309,4 +309,3 @@ workflows:
           context: SonarCloud
           requires:
             - ejecutando-tests-funcionales
-
